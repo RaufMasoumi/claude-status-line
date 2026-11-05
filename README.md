@@ -6,6 +6,8 @@ A status line for [Claude Code](https://claude.com/claude-code) that shows the m
 ⟡ Opus 5.5   ▁▂▃▅▇ high   ctx ──────── 42%   5h ──────── 63% 2h10m   wk ──────── 88% 3d11h
 ```
 
+**Preview every theme in color:** [raufmasoumi.github.io/claude-status-line](https://raufmasoumi.github.io/claude-status-line/) (the page is [`docs/index.html`](docs/index.html)).
+
 ## Install
 
 Requires Python 3.8 or later.
@@ -68,3 +70,11 @@ The `-mini` themes stay compact and don't stretch. `refreshInterval` redraws the
 - `5h` and `wk` show `--` until Claude's first reply in a session, and only appear on a Claude.ai plan.
 - `STATUSLINE_THEME=<name>` overrides the saved theme, and `STATUSLINE_DEBUG=1` saves the input from Claude Code to `~/.claude/statusline-input.json`.
 - The script respects `CLAUDE_CONFIG_DIR` if your Claude folder lives somewhere else.
+
+## Preview page
+
+`docs/index.html` is built from the script's real output by `tools/build_preview.py`, using `tools/preview_template.html`. After changing either the script or the template, rebuild the page:
+
+```sh
+python tools/build_preview.py
+```

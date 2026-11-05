@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Neon Status Line</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  /* Layout: one terminal-width column; each theme is a strip of real terminal output with its width in columns. */
+  /* Single dark theme by choice: the previews are terminal colors and only read correctly on a dark ground. */
+  :root {
+    --ink: #0b0e1a;
+    --panel: #121629;
+    --term: #080a13;
+    --line: #232a4a;
+    --text: #dde2f4;
+    --muted: #8c93b4;
+    --cyan: #00e5ff;
+    --pink: #ff40a0;
+    --ok: #50c878;
+    --font-display: "Martian Mono", "JetBrains Mono", ui-monospace, monospace;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font: 15px/1.6 var(--font-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 40px 64px;
+  }
+  main { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+  h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(28px, 6vw, 44px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  h1 .a { color: var(--cyan); text-shadow: 0 0 18px rgba(0, 229, 255, .45); }
+  h1 .b { color: var(--pink); text-shadow: 0 0 18px rgba(255, 64, 160, .45); }
+  h2 { font-size: 18px; font-weight: 500; letter-spacing: .02em; }
+  p { margin: 0; max-width: 65ch; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .lede { color: var(--muted); font-size: 17px; }
+  .source { font: 13px var(--font-mono); color: var(--muted); }
+  .source a { color: var(--cyan); }
+  .eyebrow { font: 500 12px var(--font-mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  code, kbd { font-family: var(--font-mono); font-size: .9em; }
+  :not(pre) > code { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+  /* Hero: a mock Claude Code pane with the status line at the bottom. */
+  .hero { display: flex; flex-direction: column; gap: 20px; }
+  .window { background: var(--term); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .window-bar { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .window-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .window-body { padding: 16px; font: 13.5px/1.7 var(--font-mono); display: flex; flex-direction: column; gap: 12px; }
+  .window-body .prompt { color: var(--muted); }
+  .window-body .prompt b { color: var(--text); font-weight: 400; }
+  .scroll { overflow-x: auto; white-space: pre; }
+
+  /* What it shows */
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .fields div { background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .fields dt { font: 700 13px var(--font-mono); color: var(--cyan); }
+  .fields dd { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+
+  /* Theme gallery */
+  .themes { display: flex; flex-direction: column; gap: 12px; }
+  .theme { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .theme-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .theme-name { font: 700 14px var(--font-mono); }
+  .cols { font: 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip { font: 500 11px var(--font-mono); letter-spacing: .04em; border-radius: 999px; padding: 2px 8px; border: 1px solid; }
+  .chip.narrow { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .chip.font { color: var(--muted); border-color: var(--line); }
+  .theme-head .copy { margin-left: auto; }
+  .strip { background: var(--term); border-radius: 6px; padding: 10px 12px; font: 13.5px/1.5 var(--font-mono); overflow-x: auto; white-space: pre; }
+  .ruler { position: relative; height: 4px; background: var(--line); border-radius: 2px; }
+  .ruler .fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: linear-gradient(90deg, var(--cyan), var(--pink)); }
+  .ruler .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: .5; }
+
+  /* Powerline arrows drawn in CSS, so they show without a powerline font. */
+  .pl { display: inline-block; width: .6em; height: 1.5em; vertical-align: top; }
+  .pl i { display: block; width: 100%; height: 100%; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  .pl.thin i { clip-path: polygon(0 0, 18% 0, 100% 50%, 18% 100%, 0 100%, 82% 50%); }
+
+  /* Install steps */
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; counter-reset: step; }
+  .steps > li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; counter-increment: step; }
+  .steps > li::before { content: counter(step); font: 700 14px var(--font-display); color: var(--ink); background: var(--cyan); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
+  .step-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .step-body h3 { margin: 2px 0 0; font: 600 16px var(--font-body); }
+  .os { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+  .os > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .code { position: relative; background: var(--term); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+  .code pre { margin: 0; padding: 12px 14px; font: 13px/1.55 var(--font-mono); overflow-x: auto; }
+  .code .copy { position: absolute; top: 8px; right: 8px; }
+  .code.tall pre { max-height: 420px; overflow: auto; padding-top: 44px; }
+
+  button.copy {
+    font: 500 12px var(--font-mono); color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  button.copy:hover { border-color: var(--cyan); color: var(--cyan); }
+  button.copy:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  button.copy.done { color: var(--ok); border-color: var(--ok); }
+
+  .notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); max-width: 70ch; }
+  .notes strong { color: var(--text); font-weight: 500; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<main>
+  <header class="hero">
+    <span class="eyebrow">Claude Code · status line</span>
+    <h1><span class="a">Neon</span> <span class="b">Status</span> Line</h1>
+    <p class="lede">A status line for Claude Code that shows the model, effort level, context use, and your 5-hour and weekly limits. One Python file, no packages, nine themes.</p>
+    <p class="source">Source and install commands: <a href="https://github.com/RaufMasoumi/claude-status-line">github.com/RaufMasoumi/claude-status-line</a></p>
+    <div class="window" aria-label="Example Claude Code window with the neon-mini theme">
+      <div class="window-bar"><i></i><i></i><i></i></div>
+      <div class="window-body">
+        <div class="prompt">&gt; <b>add a refund endpoint to the wallet app</b></div>
+        <div class="prompt">● Reading apps/wallet/services.py…</div>
+        <div class="scroll"><span style="color:rgb(0,229,255);font-weight:700">◆ Opus 5.5</span>  <span style="color:rgb(80,200,120)">▁</span><span style="color:rgb(160,195,90)">▂</span><span style="color:rgb(240,190,60)">▃</span><span style="color:rgb(60,64,75)">▅</span><span style="color:rgb(60,64,75)">▇</span> <span style="color:rgb(255,64,160)">high</span>  <span style="color:rgb(255,64,160)">ctx</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(60,64,75)">━━━</span> <span style="color:rgb(214,192,70)">42%</span>  <span style="color:rgb(255,64,160)">5h</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(239,170,66)">━</span><span style="color:rgb(60,64,75)">━━</span> <span style="color:rgb(239,164,68)">63%</span>  <span style="color:rgb(255,64,160)">wk</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(239,170,66)">━</span><span style="color:rgb(237,130,78)">━</span><span style="color:rgb(60,64,75)">━</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(60,64,75)">3d11h</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>What it shows</h2>
+    <dl class="fields">
+      <div><dt>Model</dt><dd>The model this session is using.</dd></div>
+      <div><dt>Effort</dt><dd>Low to max, lit as 1–5 bars in the neon themes.</dd></div>
+      <div><dt>ctx</dt><dd>How full the context window is.</dd></div>
+      <div><dt>5h</dt><dd>Your 5-hour limit used, and when it resets.</dd></div>
+      <div><dt>wk</dt><dd>Your weekly limit used, and when it resets.</dd></div>
+    </dl>
+    <p>Usage turns yellow at 50% and red at 80%, in every theme.</p>
+    <p>The line fits your terminal. Meters grow to fill a wide terminal, and in a narrow one the line drops detail step by step: reset times (kept once a limit is at 80%), then the effort word, then the meters, then the model's version number. It never wraps.</p>
+  </section>
+
+  <section>
+    <h2>Themes</h2>
+    <p>Real output of the script with sample values, at each theme's natural size. The bar under each theme shows that width; the tick marks 80 columns, about a terminal on a third of a 1920px screen. In Claude Code every theme then stretches or shrinks to your terminal. Try a width with <code>python statusline.py --preview neon --width 60</code>.</p>
+    <div class="themes"><article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">classic</span>
+    <span class="cols">82 cols</span>
+    
+    <button class="copy" type="button" data-text="python statusline.py --set classic" aria-label="Copy the command that selects classic">Copy --set classic</button>
+  </div>
+  <div class="strip"><span style="color:rgb(86,182,194)">Opus 5.5</span> <span style="opacity:.55">│</span> <span style="color:rgb(198,120,221)">effort high</span> <span style="opacity:.55">│</span> ctx <span style="color:rgb(80,200,120)">████░░░░░░ 42%</span><span style="opacity:.55">/200k</span> <span style="opacity:.55">│</span> 5h <span style="color:rgb(240,190,60)">63%</span> <span style="opacity:.55">↻2h10m</span> <span style="opacity:.55">│</span> week <span style="color:rgb(235,90,90)">88%</span> <span style="opacity:.55">↻3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:74.5%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">powerline</span>
+    <span class="cols">56 cols</span>
+    <span class="chip narrow">fits a narrow pane</span><span class="chip font">needs powerline font</span>
+    <button class="copy" type="button" data-text="python statusline.py --set powerline" aria-label="Copy the command that selects powerline">Copy --set powerline</button>
+  </div>
+  <div class="strip"><span style="color:rgb(236,239,244);background:rgb(94,92,230)"> </span><span style="color:rgb(236,239,244);background:rgb(94,92,230);font-weight:700">Opus 5.5 </span><span style="color:rgb(236,239,244);background:rgb(150,90,220)"> ⚡ high </span><span style="color:rgb(80,200,120);background:rgb(45,52,66)"> ctx 42% </span><span style="color:rgb(240,190,60);background:rgb(45,52,66)"> 5h 63% </span><span style="color:rgb(160,168,180);background:rgb(45,52,66)">2h10m </span><span style="color:rgb(235,90,90);background:rgb(45,52,66)"> wk 88% </span><span style="color:rgb(160,168,180);background:rgb(45,52,66)">3d11h </span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:50.9%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">pills</span>
+    <span class="cols">67 cols</span>
+    <span class="chip narrow">fits a narrow pane</span>
+    <button class="copy" type="button" data-text="python statusline.py --set pills" aria-label="Copy the command that selects pills">Copy --set pills</button>
+  </div>
+  <div class="strip"><span style="color:rgb(24,26,33);background:rgb(122,162,247)"> </span><span style="color:rgb(24,26,33);background:rgb(122,162,247);font-weight:700">Opus 5.5 </span> <span style="color:rgb(24,26,33);background:rgb(187,154,247)"> high ●●●○○ </span> <span style="color:rgb(24,26,33);background:rgb(80,200,120)"> ctx 42% </span> <span style="color:rgb(24,26,33);background:rgb(240,190,60)"> 5h 63% · 2h10m </span> <span style="color:rgb(24,26,33);background:rgb(235,90,90)"> wk 88% · 3d11h </span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:60.9%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">minimal</span>
+    <span class="cols">59 cols</span>
+    <span class="chip narrow">fits a narrow pane</span>
+    <button class="copy" type="button" data-text="python statusline.py --set minimal" aria-label="Copy the command that selects minimal">Copy --set minimal</button>
+  </div>
+  <div class="strip"><span style="font-weight:700">Opus 5.5</span> <span style="color:rgb(110,118,129)">high</span><span style="color:rgb(110,118,129)">  ·  </span><span style="color:rgb(110,118,129)">ctx</span> <span style="color:rgb(80,200,120)">42%</span><span style="color:rgb(110,118,129)">  ·  </span><span style="color:rgb(110,118,129)">5h</span> <span style="color:rgb(240,190,60)">63%</span> <span style="color:rgb(110,118,129)">2h10m</span><span style="color:rgb(110,118,129)">  ·  </span><span style="color:rgb(110,118,129)">wk</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(110,118,129)">3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:53.6%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">emoji</span>
+    <span class="cols">75 cols</span>
+    <span class="chip narrow">fits a narrow pane</span>
+    <button class="copy" type="button" data-text="python statusline.py --set emoji" aria-label="Copy the command that selects emoji">Copy --set emoji</button>
+  </div>
+  <div class="strip">🤖 <span style="font-weight:700">Opus 5.5</span> <span style="opacity:.55">│</span> 🧠 high <span style="opacity:.55">│</span> 📚 <span style="color:rgb(80,200,120)">▰▰▰▰</span><span style="color:rgb(80,200,120);opacity:.55">▱▱▱▱▱▱</span> <span style="color:rgb(80,200,120)">42%</span> <span style="opacity:.55">│</span> ⏳ <span style="color:rgb(240,190,60)">63%</span> <span style="opacity:.55">(2h10m)</span> <span style="opacity:.55">│</span> 📅 <span style="color:rgb(235,90,90)">88%</span> <span style="opacity:.55">(3d11h)</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:68.2%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">neon</span>
+    <span class="cols">86 cols</span>
+    
+    <button class="copy" type="button" data-text="python statusline.py --set neon" aria-label="Copy the command that selects neon">Copy --set neon</button>
+  </div>
+  <div class="strip"><span style="color:rgb(0,229,255);font-weight:700">◆ Opus 5.5</span>  <span style="color:rgb(80,200,120)">▁</span><span style="color:rgb(160,195,90)">▂</span><span style="color:rgb(240,190,60)">▃</span><span style="color:rgb(60,64,75)">▅</span><span style="color:rgb(60,64,75)">▇</span> <span style="color:rgb(255,64,160)">high</span>  <span style="color:rgb(255,64,160)">ctx</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(126,197,103)">━</span><span style="color:rgb(171,194,86)">━</span><span style="color:rgb(60,64,75)">━━━━━</span> <span style="color:rgb(214,192,70)">42%</span>  <span style="color:rgb(255,64,160)">5h</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(126,197,103)">━</span><span style="color:rgb(171,194,86)">━</span><span style="color:rgb(217,191,69)">━</span><span style="color:rgb(239,176,64)">━</span><span style="color:rgb(60,64,75)">━━━</span> <span style="color:rgb(239,164,68)">63%</span> <span style="color:rgb(60,64,75)">2h10m</span>  <span style="color:rgb(255,64,160)">wk</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(126,197,103)">━</span><span style="color:rgb(171,194,86)">━</span><span style="color:rgb(217,191,69)">━</span><span style="color:rgb(239,176,64)">━</span><span style="color:rgb(238,147,73)">━</span><span style="color:rgb(236,119,81)">━</span><span style="color:rgb(60,64,75)">━</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(60,64,75)">3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:78.2%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">neon-mini</span>
+    <span class="cols">74 cols</span>
+    <span class="chip narrow">fits a narrow pane</span>
+    <button class="copy" type="button" data-text="python statusline.py --set neon-mini" aria-label="Copy the command that selects neon-mini">Copy --set neon-mini</button>
+  </div>
+  <div class="strip"><span style="color:rgb(0,229,255);font-weight:700">◆ Opus 5.5</span>  <span style="color:rgb(80,200,120)">▁</span><span style="color:rgb(160,195,90)">▂</span><span style="color:rgb(240,190,60)">▃</span><span style="color:rgb(60,64,75)">▅</span><span style="color:rgb(60,64,75)">▇</span> <span style="color:rgb(255,64,160)">high</span>  <span style="color:rgb(255,64,160)">ctx</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(60,64,75)">━━━</span> <span style="color:rgb(214,192,70)">42%</span>  <span style="color:rgb(255,64,160)">5h</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(239,170,66)">━</span><span style="color:rgb(60,64,75)">━━</span> <span style="color:rgb(239,164,68)">63%</span>  <span style="color:rgb(255,64,160)">wk</span> <span style="color:rgb(80,200,120)">━</span><span style="color:rgb(144,196,96)">━</span><span style="color:rgb(208,192,72)">━</span><span style="color:rgb(239,170,66)">━</span><span style="color:rgb(237,130,78)">━</span><span style="color:rgb(60,64,75)">━</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(60,64,75)">3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:67.3%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">neon-laser</span>
+    <span class="cols">102 cols</span>
+    
+    <button class="copy" type="button" data-text="python statusline.py --set neon-laser" aria-label="Copy the command that selects neon-laser">Copy --set neon-laser</button>
+  </div>
+  <div class="strip"><span style="color:rgb(255,80,200);font-weight:700">⟡ Opus 5.5</span>   <span style="color:rgb(120,255,240)">▁</span><span style="color:rgb(188,168,220)">▂</span><span style="color:rgb(255,80,200)">▃</span><span style="color:rgb(55,55,70)">▅</span><span style="color:rgb(55,55,70)">▇</span> <span style="color:rgb(120,255,240)">high</span>   <span style="color:rgb(120,255,240)">ctx</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(145,223,233)">─</span><span style="color:rgb(169,191,225)">─</span><span style="color:rgb(194,160,218)">─</span><span style="color:rgb(218,128,211)">─</span><span style="color:rgb(55,55,70)">───────</span> <span style="color:rgb(233,108,206)">42%</span>   <span style="color:rgb(120,255,240)">5h</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(145,223,233)">─</span><span style="color:rgb(169,191,225)">─</span><span style="color:rgb(194,160,218)">─</span><span style="color:rgb(218,128,211)">─</span><span style="color:rgb(243,96,204)">─</span><span style="color:rgb(255,95,205)">─</span><span style="color:rgb(255,124,214)">─</span><span style="color:rgb(55,55,70)">────</span> <span style="color:rgb(255,122,213)">63%</span> <span style="color:rgb(55,55,70)">2h10m</span>   <span style="color:rgb(120,255,240)">wk</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(145,223,233)">─</span><span style="color:rgb(169,191,225)">─</span><span style="color:rgb(194,160,218)">─</span><span style="color:rgb(218,128,211)">─</span><span style="color:rgb(243,96,204)">─</span><span style="color:rgb(255,95,205)">─</span><span style="color:rgb(255,124,214)">─</span><span style="color:rgb(255,153,223)">─</span><span style="color:rgb(255,182,232)">─</span><span style="color:rgb(255,211,241)">─</span><span style="color:rgb(55,55,70)">─</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(55,55,70)">3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:92.7%"></span><span class="mark" style="left:72.7%"></span></div>
+</article>
+<article class="theme">
+  <div class="theme-head">
+    <span class="theme-name">neon-laser-mini</span>
+    <span class="cols">74 cols</span>
+    <span class="chip narrow">fits a narrow pane</span>
+    <button class="copy" type="button" data-text="python statusline.py --set neon-laser-mini" aria-label="Copy the command that selects neon-laser-mini">Copy --set neon-laser-mini</button>
+  </div>
+  <div class="strip"><span style="color:rgb(255,80,200);font-weight:700">⟡ Opus 5.5</span>  <span style="color:rgb(120,255,240)">▁</span><span style="color:rgb(188,168,220)">▂</span><span style="color:rgb(255,80,200)">▃</span><span style="color:rgb(55,55,70)">▅</span><span style="color:rgb(55,55,70)">▇</span> <span style="color:rgb(120,255,240)">high</span>  <span style="color:rgb(120,255,240)">ctx</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(174,185,224)">─</span><span style="color:rgb(228,115,208)">─</span><span style="color:rgb(55,55,70)">───</span> <span style="color:rgb(233,108,206)">42%</span>  <span style="color:rgb(120,255,240)">5h</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(174,185,224)">─</span><span style="color:rgb(228,115,208)">─</span><span style="color:rgb(255,112,210)">─</span><span style="color:rgb(55,55,70)">──</span> <span style="color:rgb(255,122,213)">63%</span>  <span style="color:rgb(120,255,240)">wk</span> <span style="color:rgb(120,255,240)">─</span><span style="color:rgb(174,185,224)">─</span><span style="color:rgb(228,115,208)">─</span><span style="color:rgb(255,112,210)">─</span><span style="color:rgb(255,176,230)">─</span><span style="color:rgb(55,55,70)">─</span> <span style="color:rgb(235,90,90)">88%</span> <span style="color:rgb(55,55,70)">3d11h</span></div>
+  <div class="ruler" aria-hidden="true"><span class="fill" style="width:67.3%"></span><span class="mark" style="left:72.7%"></span></div>
+</article></div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <ol class="steps">
+      <li><div class="step-body">
+        <h3>Save the script</h3>
+        <p>Copy the script from <a href="#script" style="color:var(--cyan)">the bottom of this page</a> and save it as <code>statusline.py</code> in your Claude folder: <code>C:\Users\&lt;you&gt;\.claude\</code> on Windows, <code>~/.claude/</code> on macOS and Linux. It needs Python 3.8 or later.</p>
+      </div></li>
+      <li><div class="step-body">
+        <h3>Point Claude Code at it</h3>
+        <p>Add this to your user settings, <code>~/.claude/settings.json</code>, keeping the settings already there. <code>refreshInterval</code> redraws the line every 3 seconds, so it adjusts soon after you resize the terminal.</p>
+        <div class="os">
+          <div><span class="eyebrow">Windows</span>
+            <div class="code"><button class="copy" type="button" data-copy="set-win">Copy</button><pre id="set-win">"statusLine": {
+  "type": "command",
+  "command": "python C:/Users/&lt;you&gt;/.claude/statusline.py",
+  "padding": 0,
+  "refreshInterval": 3
+}</pre></div></div>
+          <div><span class="eyebrow">macOS / Linux</span>
+            <div class="code"><button class="copy" type="button" data-copy="set-nix">Copy</button><pre id="set-nix">"statusLine": {
+  "type": "command",
+  "command": "python3 ~/.claude/statusline.py",
+  "padding": 0,
+  "refreshInterval": 3
+}</pre></div></div>
+        </div>
+      </div></li>
+      <li><div class="step-body">
+        <h3>Pick a theme</h3>
+        <p>From your Claude folder, preview every theme in color, then choose one. The status line switches on its next refresh. Without a choice you get <code>classic</code>.</p>
+        <div class="code"><button class="copy" type="button" data-copy="pick">Copy</button><pre id="pick">python statusline.py --preview
+python statusline.py --set neon-mini</pre></div>
+      </div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Good to know</h2>
+    <ul class="notes">
+      <li><strong>5h and wk show <code>--</code> at first.</strong> Claude Code sends usage only on a Claude.ai plan, and only after Claude's first reply in a session.</li>
+      <li><strong>Effort</strong> comes from what Claude Code sends. If it sends none, the script uses the effort saved in your <code>settings.json</code>.</li>
+      <li><strong>powerline</strong> needs a font with powerline arrows, such as Cascadia Code (the Windows Terminal default) or any Nerd Font. If you see boxes, use <code>pills</code>.</li>
+      <li>Set <code>STATUSLINE_THEME</code> to override the saved theme, or <code>STATUSLINE_DEBUG=1</code> to save what Claude Code sends to <code>~/.claude/statusline-input.json</code>.</li>
+    </ul>
+  </section>
+
+  <section id="script">
+    <h2>The script</h2>
+    <p><code>statusline.py</code>, 604 lines, standard library only.</p>
+    <div class="code tall"><button class="copy" type="button" data-copy="src">Copy script</button><pre id="src">&quot;&quot;&quot;Render the Claude Code status line: model, effort, context, 5-hour and weekly usage.
+
+Claude Code pipes a JSON blob on stdin and shows the first line printed. The
+line fits the terminal: Claude Code passes the width in COLUMNS, meters grow to
+fill it, and detail is dropped step by step when the terminal gets narrow.
+
+Usage:
+    python statusline.py                          # normal mode (stdin JSON from Claude Code)
+    python statusline.py --preview [prefix]       # print themes with sample data
+    python statusline.py --preview neon --width 60
+    python statusline.py --set &lt;theme&gt;            # choose the theme (~/.claude/statusline-theme)
+
+The theme can also be forced with the STATUSLINE_THEME env var.
+Set STATUSLINE_DEBUG=1 to save the last input to ~/.claude/statusline-input.json.
+&quot;&quot;&quot;
+
+import json
+import os
+import re
+import shutil
+import sys
+import time
+import unicodedata
+from pathlib import Path
+
+CLAUDE_DIR = Path(os.environ.get(&quot;CLAUDE_CONFIG_DIR&quot;) or Path.home() / &quot;.claude&quot;)
+THEME_FILE = CLAUDE_DIR / &quot;statusline-theme&quot;
+DEFAULT_THEME = &quot;classic&quot;
+EFFORT_LEVELS = [&quot;low&quot;, &quot;medium&quot;, &quot;high&quot;, &quot;xhigh&quot;, &quot;max&quot;]
+EFFORT_SHORT = {&quot;low&quot;: &quot;L&quot;, &quot;medium&quot;: &quot;M&quot;, &quot;high&quot;: &quot;H&quot;, &quot;xhigh&quot;: &quot;XH&quot;, &quot;max&quot;: &quot;MAX&quot;}
+# Columns kept free at the right edge so the line never wraps.
+EDGE_MARGIN = 2
+ALERT_PCT = 80
+
+RESET = &quot;\033[0m&quot;
+BOLD = &quot;\033[1m&quot;
+DIM = &quot;\033[2m&quot;
+ANSI = re.compile(r&quot;\x1b\[[0-9;]*m&quot;)
+
+
+# --- colour helpers -------------------------------------------------------
+
+
+def fg(r, g, b):
+    &quot;&quot;&quot;Return a 24-bit foreground colour code.&quot;&quot;&quot;
+    return f&quot;\033[38;2;{r};{g};{b}m&quot;
+
+
+def bg(r, g, b):
+    &quot;&quot;&quot;Return a 24-bit background colour code.&quot;&quot;&quot;
+    return f&quot;\033[48;2;{r};{g};{b}m&quot;
+
+
+GREEN = (80, 200, 120)
+YELLOW = (240, 190, 60)
+RED = (235, 90, 90)
+GREY = (110, 118, 129)
+
+
+def level(pct):
+    &quot;&quot;&quot;Pick green / yellow / red for a usage percentage.&quot;&quot;&quot;
+    if pct is None:
+        return GREY
+    if pct &gt;= ALERT_PCT:
+        return RED
+    if pct &gt;= 50:
+        return YELLOW
+    return GREEN
+
+
+def lerp(a, b, t):
+    &quot;&quot;&quot;Blend two RGB colours.&quot;&quot;&quot;
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def multi_gradient(stops, t):
+    &quot;&quot;&quot;Blend across any number of RGB colour stops for t in 0..1.&quot;&quot;&quot;
+    t = max(0.0, min(1.0, t))
+    pos = t * (len(stops) - 1)
+    i = min(int(pos), len(stops) - 2)
+    return lerp(stops[i], stops[i + 1], pos - i)
+
+
+def pct_txt(pct):
+    &quot;&quot;&quot;Format a percentage, or a dash when it&#x27;s unknown.&quot;&quot;&quot;
+    return &quot;--&quot; if pct is None else f&quot;{pct:.0f}%&quot;
+
+
+def filled(pct, width):
+    &quot;&quot;&quot;Return how many cells of a bar are filled.&quot;&quot;&quot;
+    if pct is None:
+        return 0
+    return max(0, min(width, round(pct / 100 * width)))
+
+
+def effort_rank(effort):
+    &quot;&quot;&quot;Return 1..5 for the effort level, 0 if unknown.&quot;&quot;&quot;
+    try:
+        return EFFORT_LEVELS.index(effort.lower()) + 1
+    except ValueError:
+        return 0
+
+
+def visible_width(text):
+    &quot;&quot;&quot;Count terminal columns, with wide characters (emoji) as two.&quot;&quot;&quot;
+    plain = ANSI.sub(&quot;&quot;, text).replace(&quot;️&quot;, &quot;&quot;)
+    return sum(2 if unicodedata.east_asian_width(ch) in (&quot;W&quot;, &quot;F&quot;) else 1 for ch in plain)
+
+
+# --- reading the input ----------------------------------------------------
+
+
+def fmt_reset(resets_at):
+    &quot;&quot;&quot;Turn an epoch timestamp into a short &#x27;2h13m&#x27; / &#x27;3d4h&#x27; string.&quot;&quot;&quot;
+    if not resets_at:
+        return &quot;&quot;
+    try:
+        secs = int(float(resets_at) - time.time())
+    except (TypeError, ValueError):
+        return &quot;&quot;
+    if secs &lt;= 0:
+        return &quot;&quot;
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    mins = rem // 60
+    if days:
+        return f&quot;{days}d{hours}h&quot;
+    if hours:
+        return f&quot;{hours}h{mins:02d}m&quot;
+    return f&quot;{mins}m&quot;
+
+
+def fmt_size(size):
+    &quot;&quot;&quot;Format a context window size as 200k / 1M.&quot;&quot;&quot;
+    if not size:
+        return &quot;&quot;
+    if size &gt;= 1_000_000:
+        return f&quot;{size / 1_000_000:g}M&quot;
+    return f&quot;{round(size / 1000)}k&quot;
+
+
+def read_settings_effort(model_id):
+    &quot;&quot;&quot;Fall back to the effort level saved in ~/.claude/settings.json.&quot;&quot;&quot;
+    try:
+        settings = json.loads((CLAUDE_DIR / &quot;settings.json&quot;).read_text(encoding=&quot;utf-8&quot;))
+    except (OSError, ValueError):
+        return None
+    for key, value in settings.get(&quot;modelSettings&quot;, {}).items():
+        if model_id and (key == model_id or model_id.startswith(key)):
+            if isinstance(value, dict) and value.get(&quot;effortLevel&quot;):
+                return value[&quot;effortLevel&quot;]
+    return settings.get(&quot;effortLevel&quot;)
+
+
+def get_effort(data, model_id):
+    &quot;&quot;&quot;Read the effort level from the input, then env, then settings.&quot;&quot;&quot;
+    for candidate in (data.get(&quot;effort&quot;), (data.get(&quot;model&quot;) or {}).get(&quot;effort&quot;)):
+        if isinstance(candidate, dict):
+            candidate = candidate.get(&quot;level&quot;) or candidate.get(&quot;name&quot;)
+        if candidate:
+            return str(candidate)
+    if data.get(&quot;effortLevel&quot;):
+        return str(data[&quot;effortLevel&quot;])
+    env = os.environ.get(&quot;CLAUDE_CODE_EFFORT_LEVEL&quot;)
+    if env:
+        return env
+    return read_settings_effort(model_id) or &quot;default&quot;
+
+
+def get_context(data):
+    &quot;&quot;&quot;Return (used percentage, window size) for the context window.&quot;&quot;&quot;
+    cw = data.get(&quot;context_window&quot;) or {}
+    pct = cw.get(&quot;used_percentage&quot;)
+    size = cw.get(&quot;context_window_size&quot;)
+    if pct is None:
+        usage = cw.get(&quot;current_usage&quot;) or {}
+        used = sum(
+            usage.get(k) or 0
+            for k in (&quot;input_tokens&quot;, &quot;cache_creation_input_tokens&quot;, &quot;cache_read_input_tokens&quot;)
+        )
+        if size and used:
+            pct = used / size * 100
+    return (None if pct is None else float(pct)), size
+
+
+def get_limit(window):
+    &quot;&quot;&quot;Return (used percentage, reset text) for one rate-limit window.&quot;&quot;&quot;
+    if not isinstance(window, dict) or window.get(&quot;used_percentage&quot;) is None:
+        return None, &quot;&quot;
+    return float(window[&quot;used_percentage&quot;]), fmt_reset(window.get(&quot;resets_at&quot;))
+
+
+def collect(data):
+    &quot;&quot;&quot;Pull everything the themes need out of the raw input.&quot;&quot;&quot;
+    model = data.get(&quot;model&quot;) or {}
+    limits = data.get(&quot;rate_limits&quot;) or {}
+    ctx, size = get_context(data)
+    five, five_reset = get_limit(limits.get(&quot;five_hour&quot;))
+    week, week_reset = get_limit(limits.get(&quot;seven_day&quot;))
+    return {
+        &quot;model&quot;: model.get(&quot;display_name&quot;) or model.get(&quot;id&quot;) or &quot;?&quot;,
+        &quot;effort&quot;: get_effort(data, model.get(&quot;id&quot;)),
+        &quot;ctx&quot;: ctx,
+        &quot;size&quot;: fmt_size(size),
+        &quot;five&quot;: five,
+        &quot;five_reset&quot;: five_reset,
+        &quot;week&quot;: week,
+        &quot;week_reset&quot;: week_reset,
+    }
+
+
+def terminal_width():
+    &quot;&quot;&quot;Return the terminal width in columns, or None when it can&#x27;t be known.
+
+    Claude Code runs the status line with piped stdio and passes the width in
+    COLUMNS; a console probe would report the hidden console&#x27;s size instead.
+    &quot;&quot;&quot;
+    try:
+        cols = int(os.environ.get(&quot;COLUMNS&quot;, &quot;&quot;))
+    except ValueError:
+        cols = 0
+    if cols &lt;= 0:
+        cols = shutil.get_terminal_size((0, 0)).columns
+    return cols if cols &gt; 0 else None
+
+
+# --- render options -------------------------------------------------------
+#
+# Every theme renders from the same options, so one fitter can shrink any of
+# them: meter = bar length (0 hides bars), resets = &quot;all&quot; | &quot;alert&quot; | &quot;none&quot;,
+# effort_word = show &quot;high&quot; (False shows bars or a short code), short = last
+# resort (model&#x27;s first word, short labels, no effort).
+
+RESETS_ORDER = [&quot;none&quot;, &quot;alert&quot;, &quot;all&quot;]
+
+
+def show_reset(o, pct, reset):
+    &quot;&quot;&quot;Decide whether a limit&#x27;s reset time is shown under these options.&quot;&quot;&quot;
+    if not reset or o[&quot;resets&quot;] == &quot;none&quot;:
+        return False
+    if o[&quot;resets&quot;] == &quot;alert&quot;:
+        return pct is not None and pct &gt;= ALERT_PCT
+    return True
+
+
+def model_name(s, o):
+    &quot;&quot;&quot;Return the model name, shortened to its first word in short mode.&quot;&quot;&quot;
+    return s[&quot;model&quot;].split()[0] if o[&quot;short&quot;] else s[&quot;model&quot;]
+
+
+def effort_txt(s, o):
+    &quot;&quot;&quot;Return the effort as a word or a short code.&quot;&quot;&quot;
+    if o[&quot;effort_word&quot;]:
+        return s[&quot;effort&quot;]
+    return EFFORT_SHORT.get(s[&quot;effort&quot;].lower(), s[&quot;effort&quot;][:1].upper())
+
+
+# --- themes ---------------------------------------------------------------
+
+
+def theme_classic(s, o):
+    &quot;&quot;&quot;Coloured text with a block bar for context.&quot;&quot;&quot;
+    sep = f&quot; {DIM}│{RESET} &quot;
+    c = fg(*level(s[&quot;ctx&quot;]))
+
+    def limit(label, pct, reset):
+        r = f&quot; {DIM}↻{reset}{RESET}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+        return f&quot;{label} {fg(*level(pct))}{pct_txt(pct)}{RESET}{r}&quot;
+
+    size = f&quot;{DIM}/{s[&#x27;size&#x27;]}{RESET}&quot; if s[&quot;size&quot;] and not o[&quot;short&quot;] else &quot;&quot;
+    if o[&quot;meter&quot;]:
+        n = filled(s[&quot;ctx&quot;], o[&quot;meter&quot;])
+        ctx = f&quot;ctx {c}{&#x27;█&#x27; * n}{&#x27;░&#x27; * (o[&#x27;meter&#x27;] - n)} {pct_txt(s[&#x27;ctx&#x27;])}{RESET}{size}&quot;
+    else:
+        ctx = f&quot;ctx {c}{pct_txt(s[&#x27;ctx&#x27;])}{RESET}{size}&quot;
+    parts = [f&quot;{fg(86, 182, 194)}{model_name(s, o)}{RESET}&quot;]
+    if not o[&quot;short&quot;]:
+        label = &quot;effort &quot; if o[&quot;effort_word&quot;] else &quot;&quot;
+        parts.append(f&quot;{fg(198, 120, 221)}{label}{effort_txt(s, o)}{RESET}&quot;)
+    parts += [
+        ctx,
+        limit(&quot;5h&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+        limit(&quot;wk&quot; if o[&quot;short&quot;] or not o[&quot;effort_word&quot;] else &quot;week&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+    ]
+    return sep.join(parts)
+
+
+def theme_powerline(s, o):
+    &quot;&quot;&quot;Solid segments joined by powerline arrows (needs a powerline-capable font).&quot;&quot;&quot;
+    slate = (45, 52, 66)
+    light = (236, 239, 244)
+    muted = fg(160, 168, 180)
+
+    def limit(label, pct, reset):
+        r = f&quot; {muted}{reset}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+        return (slate, level(pct), f&quot;{label} {pct_txt(pct)}{r}&quot;)
+
+    segs = [((94, 92, 230), light, f&quot;{BOLD}{model_name(s, o)}&quot;)]
+    if not o[&quot;short&quot;]:
+        segs.append(((150, 90, 220), light, f&quot;⚡ {effort_txt(s, o)}&quot;))
+    segs += [
+        (slate, level(s[&quot;ctx&quot;]), f&quot;ctx {pct_txt(s[&#x27;ctx&#x27;])}&quot;),
+        limit(&quot;5h&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+        limit(&quot;wk&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+    ]
+    out = []
+    for i, (b, f, text) in enumerate(segs):
+        out.append(f&quot;{bg(*b)}{fg(*f)} {text} {RESET}&quot;)
+        nxt = segs[i + 1][0] if i + 1 &lt; len(segs) else None
+        if nxt is None:
+            out.append(f&quot;{fg(*b)}{RESET}&quot;)
+        elif nxt == b:
+            out.append(f&quot;{bg(*b)}{fg(80, 90, 105)}{RESET}&quot;)
+        else:
+            out.append(f&quot;{bg(*nxt)}{fg(*b)}{RESET}&quot;)
+    return &quot;&quot;.join(out)
+
+
+def theme_pills(s, o):
+    &quot;&quot;&quot;Rounded-looking coloured badges separated by spaces.&quot;&quot;&quot;
+    dark = (24, 26, 33)
+
+    def pill(b, text, f=dark):
+        return f&quot;{bg(*b)}{fg(*f)} {text} {RESET}&quot;
+
+    def limit(label, pct, reset):
+        r = f&quot; · {reset}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+        return pill(level(pct), f&quot;{label} {pct_txt(pct)}{r}&quot;)
+
+    rank = effort_rank(s[&quot;effort&quot;])
+    dots = &quot;●&quot; * rank + &quot;○&quot; * (5 - rank)
+    parts = [pill((122, 162, 247), f&quot;{BOLD}{model_name(s, o)}&quot;)]
+    if not o[&quot;short&quot;]:
+        text = f&quot;{s[&#x27;effort&#x27;]} {dots}&quot; if o[&quot;effort_word&quot;] else dots
+        parts.append(pill((187, 154, 247), text))
+    parts += [
+        pill(level(s[&quot;ctx&quot;]), f&quot;ctx {pct_txt(s[&#x27;ctx&#x27;])}&quot;),
+        limit(&quot;5h&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+        limit(&quot;wk&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+    ]
+    return &quot; &quot;.join(parts)
+
+
+def theme_minimal(s, o):
+    &quot;&quot;&quot;Quiet grey labels; only the numbers carry colour.&quot;&quot;&quot;
+    d = fg(*GREY)
+    sep = f&quot;{d}  ·  {RESET}&quot; if not o[&quot;short&quot;] else f&quot;{d} · {RESET}&quot;
+
+    def num(pct):
+        return f&quot;{fg(*level(pct))}{pct_txt(pct)}{RESET}&quot;
+
+    def limit(label, pct, reset):
+        r = f&quot; {d}{reset}{RESET}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+        return f&quot;{d}{label}{RESET} {num(pct)}{r}&quot;
+
+    head = f&quot;{BOLD}{model_name(s, o)}{RESET}&quot;
+    if not o[&quot;short&quot;]:
+        head += f&quot; {d}{effort_txt(s, o)}{RESET}&quot;
+    return sep.join(
+        [
+            head,
+            f&quot;{d}ctx{RESET} {num(s[&#x27;ctx&#x27;])}&quot;,
+            limit(&quot;5h&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+            limit(&quot;wk&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+        ]
+    )
+
+
+def theme_emoji(s, o):
+    &quot;&quot;&quot;Friendly emoji labels with a segmented context bar.&quot;&quot;&quot;
+    sep = f&quot; {DIM}│{RESET} &quot;
+    c = fg(*level(s[&quot;ctx&quot;]))
+
+    def limit(icon, pct, reset):
+        r = f&quot; {DIM}({reset}){RESET}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+        return f&quot;{icon} {fg(*level(pct))}{pct_txt(pct)}{RESET}{r}&quot;
+
+    if o[&quot;meter&quot;]:
+        n = filled(s[&quot;ctx&quot;], o[&quot;meter&quot;])
+        bar = f&quot;{c}{&#x27;▰&#x27; * n}{DIM}{&#x27;▱&#x27; * (o[&#x27;meter&#x27;] - n)}{RESET} &quot;
+    else:
+        bar = &quot;&quot;
+    parts = [f&quot;🤖 {BOLD}{model_name(s, o)}{RESET}&quot;]
+    if not o[&quot;short&quot;]:
+        parts.append(f&quot;🧠 {effort_txt(s, o)}&quot;)
+    parts += [
+        f&quot;📚 {bar}{c}{pct_txt(s[&#x27;ctx&#x27;])}{RESET}&quot;,
+        limit(&quot;⏳&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+        limit(&quot;📅&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+    ]
+    return sep.join(parts)
+
+
+def make_neon(*, icon, accent, label, stops, off=(60, 64, 75), fill=&quot;━&quot;, empty=&quot;━&quot;,
+              effort=&quot;▁▂▃▅▇&quot;, sep=&quot;  &quot;, alert=RED):
+    &quot;&quot;&quot;Build a neon-style theme: glowing labels and gradient meters.&quot;&quot;&quot;
+
+    def render(s, o):
+        dim = fg(*off)
+        width = o[&quot;meter&quot;]
+
+        def pct_color(pct):
+            if pct is None:
+                return GREY
+            return alert if pct &gt;= ALERT_PCT else multi_gradient(stops, pct / 100)
+
+        def meter(pct):
+            if not width:
+                return &quot;&quot;
+            n = filled(pct, width)
+            cells = &quot;&quot;.join(
+                f&quot;{fg(*multi_gradient(stops, i / max(1, width - 1)))}{fill}&quot; for i in range(n)
+            )
+            return f&quot;{cells}{dim}{empty * (width - n)}{RESET} &quot;
+
+        def gauge(name, pct, reset=&quot;&quot;):
+            r = f&quot; {dim}{reset}{RESET}&quot; if show_reset(o, pct, reset) else &quot;&quot;
+            return (
+                f&quot;{fg(*label)}{name}{RESET} {meter(pct)}&quot;
+                f&quot;{fg(*pct_color(pct))}{pct_txt(pct)}{RESET}{r}&quot;
+            )
+
+        rank = effort_rank(s[&quot;effort&quot;])
+        effort_bars = &quot;&quot;.join(
+            f&quot;{fg(*multi_gradient(stops, i / 4))}{ch}&quot; if i &lt; rank else f&quot;{dim}{ch}&quot;
+            for i, ch in enumerate(effort)
+        )
+        word = f&quot; {fg(*label)}{s[&#x27;effort&#x27;]}{RESET}&quot; if o[&quot;effort_word&quot;] else &quot;&quot;
+        joiner = f&quot;{dim}{sep}{RESET}&quot; if sep.strip() else sep
+        if o[&quot;short&quot;]:
+            joiner = &quot; &quot;
+        parts = [f&quot;{fg(*accent)}{BOLD}{icon} {model_name(s, o)}{RESET}&quot;]
+        if not o[&quot;short&quot;]:
+            parts.append(f&quot;{effort_bars}{RESET}{word}&quot;)
+        parts += [
+            gauge(&quot;ctx&quot;, s[&quot;ctx&quot;]),
+            gauge(&quot;5h&quot;, s[&quot;five&quot;], s[&quot;five_reset&quot;]),
+            gauge(&quot;wk&quot;, s[&quot;week&quot;], s[&quot;week_reset&quot;]),
+        ]
+        return joiner.join(parts)
+
+    return render
+
+
+NEON = dict(icon=&quot;◆&quot;, accent=(0, 229, 255), label=(255, 64, 160), stops=[GREEN, YELLOW, RED])
+LASER = dict(
+    icon=&quot;⟡&quot;,
+    accent=(255, 80, 200),
+    label=(120, 255, 240),
+    stops=[(120, 255, 240), (255, 80, 200), (255, 240, 250)],
+    off=(55, 55, 70),
+    fill=&quot;─&quot;,
+    empty=&quot;─&quot;,
+)
+
+
+# name -&gt; (render, base meter, max meter, richest resets mode)
+# base = the meter length when the width is unknown; the fitter grows meters
+# up to max to fill the line, and shrinks them below base when space runs out.
+THEMES = {
+    &quot;classic&quot;: (theme_classic, 10, 24, &quot;all&quot;),
+    &quot;powerline&quot;: (theme_powerline, 0, 0, &quot;all&quot;),
+    &quot;pills&quot;: (theme_pills, 0, 0, &quot;all&quot;),
+    &quot;minimal&quot;: (theme_minimal, 0, 0, &quot;all&quot;),
+    &quot;emoji&quot;: (theme_emoji, 10, 20, &quot;all&quot;),
+    &quot;neon&quot;: (make_neon(**NEON), 8, 20, &quot;all&quot;),
+    &quot;neon-mini&quot;: (make_neon(**NEON), 6, 6, &quot;alert&quot;),
+    &quot;neon-laser&quot;: (make_neon(**LASER, sep=&quot;   &quot;), 12, 24, &quot;all&quot;),
+    &quot;neon-laser-mini&quot;: (make_neon(**LASER), 6, 6, &quot;alert&quot;),
+}
+
+
+# --- fitting --------------------------------------------------------------
+
+
+def poorer(a, b):
+    &quot;&quot;&quot;Return the less detailed of two resets modes.&quot;&quot;&quot;
+    return a if RESETS_ORDER.index(a) &lt;= RESETS_ORDER.index(b) else b
+
+
+def candidates(base, top, resets):
+    &quot;&quot;&quot;List render options from most to least detailed.&quot;&quot;&quot;
+
+    def opts(meter, r, word=True, short=False):
+        return {&quot;meter&quot;: meter, &quot;resets&quot;: poorer(r, resets), &quot;effort_word&quot;: word, &quot;short&quot;: short}
+
+    small = min(4, base)
+    tiny = min(3, base)
+    steps = [opts(m, &quot;all&quot;) for m in range(top, base - 1, -1)]
+    steps += [opts(m, &quot;all&quot;) for m in range(base - 1, small - 1, -1)]
+    steps += [opts(small, &quot;alert&quot;), opts(tiny, &quot;alert&quot;)]
+    steps += [opts(tiny, &quot;alert&quot;, word=False), opts(0, &quot;alert&quot;, word=False)]
+    steps += [opts(0, &quot;none&quot;, word=False), opts(0, &quot;none&quot;, word=False, short=True)]
+    seen, out = set(), []
+    for o in steps:
+        key = tuple(o.values())
+        if key not in seen:
+            seen.add(key)
+            out.append(o)
+    return out
+
+
+def render_theme(name, s, cols=None):
+    &quot;&quot;&quot;Render a theme to fit cols columns (None = natural size).&quot;&quot;&quot;
+    render, base, top, resets = THEMES[name]
+    if cols is None:
+        return render(s, {&quot;meter&quot;: base, &quot;resets&quot;: resets, &quot;effort_word&quot;: True, &quot;short&quot;: False})
+    target = cols - EDGE_MARGIN
+    line = &quot;&quot;
+    for o in candidates(base, top, resets):
+        line = render(s, o)
+        if visible_width(line) &lt;= target:
+            return line
+    return line
+
+
+# --- entry point ----------------------------------------------------------
+
+
+def chosen_theme():
+    &quot;&quot;&quot;Return the theme name from env, then the theme file, then the default.&quot;&quot;&quot;
+    name = os.environ.get(&quot;STATUSLINE_THEME&quot;)
+    if not name:
+        try:
+            name = THEME_FILE.read_text(encoding=&quot;utf-8&quot;).strip()
+        except OSError:
+            name = &quot;&quot;
+    return name if name in THEMES else DEFAULT_THEME
+
+
+def sample_data():
+    &quot;&quot;&quot;Return example input used by --preview.&quot;&quot;&quot;
+    now = time.time()
+    return {
+        &quot;model&quot;: {&quot;id&quot;: &quot;claude-opus-5-5&quot;, &quot;display_name&quot;: &quot;Opus 5.5&quot;},
+        &quot;effort&quot;: {&quot;level&quot;: &quot;high&quot;},
+        &quot;context_window&quot;: {&quot;context_window_size&quot;: 1000000, &quot;used_percentage&quot;: 42},
+        &quot;rate_limits&quot;: {
+            &quot;five_hour&quot;: {&quot;used_percentage&quot;: 63, &quot;resets_at&quot;: now + 7800},
+            &quot;seven_day&quot;: {&quot;used_percentage&quot;: 88, &quot;resets_at&quot;: now + 300000},
+        },
+    }
+
+
+def preview(prefix, cols):
+    &quot;&quot;&quot;Print every theme (or those starting with prefix) fitted to cols.&quot;&quot;&quot;
+    s = collect(sample_data())
+    current = chosen_theme()
+    print(f&quot;{DIM}width {cols} columns{RESET}&quot;)
+    for name in THEMES:
+        if not name.startswith(prefix):
+            continue
+        mark = &quot;  (current)&quot; if name == current else &quot;&quot;
+        print(f&quot;\n{DIM}── {name}{mark}{RESET}&quot;)
+        print(render_theme(name, s, cols))
+    print()
+
+
+def main():
+    &quot;&quot;&quot;Dispatch on the command line, or render the status line from stdin.&quot;&quot;&quot;
+    try:
+        sys.stdout.reconfigure(encoding=&quot;utf-8&quot;)
+    except AttributeError:
+        pass
+    args = sys.argv[1:]
+    if args[:1] == [&quot;--preview&quot;]:
+        cols = shutil.get_terminal_size((100, 24)).columns
+        if &quot;--width&quot; in args:
+            i = args.index(&quot;--width&quot;)
+            try:
+                cols = int(args[i + 1])
+            except (IndexError, ValueError):
+                print(&quot;--width needs a number of columns, e.g. --width 60&quot;)
+                sys.exit(1)
+            del args[i : i + 2]
+        preview(args[1] if len(args) &gt; 1 else &quot;&quot;, cols)
+        return
+    if args[:1] == [&quot;--set&quot;]:
+        if len(args) &lt; 2 or args[1] not in THEMES:
+            print(f&quot;Pick one of: {&#x27;, &#x27;.join(THEMES)}&quot;)
+            sys.exit(1)
+        THEME_FILE.write_text(args[1], encoding=&quot;utf-8&quot;)
+        print(f&quot;Status line theme set to {args[1]}&quot;)
+        return
+
+    if args or sys.stdin is None or sys.stdin.isatty():
+        # Run by hand: show usage instead of waiting for input that never comes.
+        print(__doc__.strip())
+        return
+
+    raw = sys.stdin.buffer.read().decode(&quot;utf-8-sig&quot;, errors=&quot;replace&quot;)
+    try:
+        data = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    if os.environ.get(&quot;STATUSLINE_DEBUG&quot;):
+        (CLAUDE_DIR / &quot;statusline-input.json&quot;).write_text(raw, encoding=&quot;utf-8&quot;)
+    print(render_theme(chosen_theme(), collect(data), terminal_width()))
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre></div>
+  </section>
+</main>
+
+<script>
+  document.querySelectorAll("button.copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = btn.dataset.copy ? document.getElementById(btn.dataset.copy) : null;
+      var text = btn.dataset.text || (target ? target.textContent : "");
+      var label = btn.textContent;
+      function done(msg) {
+        btn.textContent = msg;
+        btn.classList.add("done");
+        setTimeout(function () { btn.textContent = label; btn.classList.remove("done"); }, 1600);
+      }
+      function selectFallback() {
+        if (!target) return;
+        var range = document.createRange();
+        range.selectNodeContents(target);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        done("Selected, press Ctrl+C");
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done("Copied"); }, selectFallback);
+      } else {
+        selectFallback();
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
