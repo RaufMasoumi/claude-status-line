@@ -101,7 +101,7 @@
   .os { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
   .os > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .code { position: relative; background: var(--term); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
-  .code pre { margin: 0; padding: 12px 14px; font: 13px/1.55 var(--font-mono); overflow-x: auto; }
+  .code pre { margin: 0; padding: 12px 76px 12px 14px; font: 13px/1.55 var(--font-mono); overflow-x: auto; }
   .code .copy { position: absolute; top: 8px; right: 8px; }
   .code.tall pre { max-height: 420px; overflow: auto; padding-top: 44px; }
 
@@ -249,7 +249,13 @@
     <ol class="steps">
       <li><div class="step-body">
         <h3>Save the script</h3>
-        <p>Copy the script from <a href="#script" style="color:var(--cyan)">the bottom of this page</a> and save it as <code>statusline.py</code> in your Claude folder: <code>C:\Users\&lt;you&gt;\.claude\</code> on Windows, <code>~/.claude/</code> on macOS and Linux. It needs Python 3.8 or later.</p>
+        <p>Download it into your Claude folder, or copy it from <a href="#script" style="color:var(--cyan)">the bottom of this page</a> and save it as <code>statusline.py</code> there. It needs Python 3.8 or later.</p>
+        <div class="os">
+          <div><span class="eyebrow">Windows (PowerShell)</span>
+            <div class="code"><button class="copy" type="button" data-copy="dl-win">Copy</button><pre id="dl-win">Invoke-WebRequest https://raw.githubusercontent.com/RaufMasoumi/claude-status-line/main/code/statusline.py -OutFile "$HOME\.claude\statusline.py"</pre></div></div>
+          <div><span class="eyebrow">macOS / Linux</span>
+            <div class="code"><button class="copy" type="button" data-copy="dl-nix">Copy</button><pre id="dl-nix">curl -o ~/.claude/statusline.py https://raw.githubusercontent.com/RaufMasoumi/claude-status-line/main/code/statusline.py</pre></div></div>
+        </div>
       </div></li>
       <li><div class="step-body">
         <h3>Point Claude Code at it</h3>
