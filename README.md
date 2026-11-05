@@ -70,7 +70,13 @@ Claude Code passes the terminal width in `COLUMNS`. The meters grow to fill wide
 4. The meters are removed.
 5. The model's version number is removed.
 
-The `-mini` themes stay compact and don't stretch. `refreshInterval` redraws the line every few seconds, so it adjusts soon after a resize.
+`refreshInterval` redraws the line every few seconds, so it adjusts soon after a resize.
+
+The `-mini` themes are the minimal form of the neon themes: no meters and no effort bars, only the effort word and the coloured percentages, about 47 columns wide. A reset time appears only once a limit reaches 80%:
+
+```
+⟡ Opus 5.5  high  ctx 42%  5h 63%  wk 88% 3d11h
+```
 
 ## Notes
 

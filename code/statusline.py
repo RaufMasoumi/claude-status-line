@@ -392,8 +392,12 @@ def theme_emoji(s, o):
 
 
 def make_neon(*, icon, accent, label, stops, off=(60, 64, 75), fill="━", empty="━",
-              effort="▁▂▃▅▇", sep="  ", alert=RED):
-    """Build a neon-style theme: glowing labels and gradient meters."""
+              effort="▁▂▃▅▇", sep="  ", alert=RED, bars=True):
+    """Build a neon-style theme: glowing labels and gradient meters.
+
+    bars=False is the minimal form: no meters and no effort bars, only the
+    effort word and the gradient-coloured percentages.
+    """
 
     def render(s, o):
         dim = fg(*off)
@@ -430,8 +434,10 @@ def make_neon(*, icon, accent, label, stops, off=(60, 64, 75), fill="━", empty
         if o["short"]:
             joiner = " "
         parts = [f"{fg(*accent)}{BOLD}{icon} {model_name(s, o)}{RESET}"]
-        if not o["short"]:
+        if not o["short"] and bars:
             parts.append(f"{effort_bars}{RESET}{word}")
+        elif not o["short"]:
+            parts.append(f"{fg(*label)}{effort_txt(s, o)}{RESET}")
         parts += [
             gauge("ctx", s["ctx"]),
             gauge("5h", s["five"], s["five_reset"]),
@@ -464,9 +470,9 @@ THEMES = {
     "minimal": (theme_minimal, 0, 0, "all"),
     "emoji": (theme_emoji, 10, 20, "all"),
     "neon": (make_neon(**NEON), 8, 20, "all"),
-    "neon-mini": (make_neon(**NEON), 6, 6, "alert"),
+    "neon-mini": (make_neon(**NEON, bars=False), 0, 0, "alert"),
     "neon-laser": (make_neon(**LASER, sep="   "), 12, 24, "all"),
-    "neon-laser-mini": (make_neon(**LASER), 6, 6, "alert"),
+    "neon-laser-mini": (make_neon(**LASER, bars=False), 0, 0, "alert"),
 }
 
 
